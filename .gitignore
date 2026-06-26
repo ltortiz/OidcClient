@@ -1,0 +1,41 @@
+## [Visual Studio / .NET Core]
+# Archivos de compilación y salida
+[Bb]in/
+[Oo]bj/
+[Log]s/
+
+# Herramientas de diagnóstico de Visual Studio
+.vs/
+MemoryDumps/
+*.serialized
+
+# Archivos de usuario y configuraciones locales
+*.user
+*.userosscache
+*.sln.docstates
+
+# Caché de paquetes NuGet
+windowcache/
+modules/
+# Evita subir los paquetes descargados localmente
+**/packages/
+!**/packages/repositories.config
+
+# Archivos generados por Rider / JetBrains (si usas este IDE)
+.idea/
+*.sln.DotSettings.user
+
+# Archivos de configuración de VS Code (opcional)
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Secretos y configuraciones con credenciales locales
+*.secrets.json
+# appsettings.Development.json
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
