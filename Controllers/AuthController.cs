@@ -2,76 +2,83 @@
 using AuthService.Models;
 using AuthService.Services;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.IdentityModel.Tokens.Jwt;
 
 namespace AuthService.Controllers
 {
     [ApiController]
-    [Route("api/auth")]
+    [Route("auth")]
     public class AuthController : ControllerBase
     {
-        private readonly ApplicationDbContext _context;
-        private readonly JwtService _jwt;
+        private readonly IAppService _appService;
 
-        public AuthController(ApplicationDbContext context, JwtService jwt)
+        public AuthController(IAppService appService)
         {
-            _context = context;
-            _jwt = jwt;
+            _appService = appService;
         }
 
-        [HttpPost("login/local")]
-        public async Task<IActionResult> LoginLocal(LoginRequest request)
+        [HttpGet("error")]
+        public IActionResult Error(string msg)
         {
-            var user = await _context.Users
-                .FirstOrDefaultAsync(u =>
-                    u.Username == request.Username ||
-                    u.UsernameOidc == request.Username);
-
-            if (user == null ||
-                !BCrypt.Net.BCrypt.Verify(request.Password, user.Password))
-                return Unauthorized();
-
-            var token = _jwt.Generate(user.Username, user.PersonId);
-
-            return Ok(new
-            {
-                access_token = token
-            });
+            return Problem(
+                title: "Error en autenticación",
+                detail: $"No fue posible completar el proceso de login. Error ({Uri.UnescapeDataString(msg)})",
+                statusCode: 500
+            );
         }
 
-        [HttpGet("login/oidc")]
-        public IActionResult LoginOidc([FromQuery] string returnUrl)
+        [HttpGet("login")]
+        public async Task<IActionResult> Login([FromQuery] LoginRequest request)
         {
-            var props = new AuthenticationProperties
+            var app = await _appService.ValidateAsync(
+                request.Username,
+                request.Password);
+
+            if (app is null)
             {
-                RedirectUri = "/api/auth/oidc/callback"
-            };
+                return Redirect($"/auth/error?msg={Uri.EscapeDataString("App no válida")}");
+            }
 
-            props.Items["returnUrl"] = returnUrl ?? "";
+            var properties = new AuthenticationProperties();
+            properties.Items["login_return"] = app.UrlLogin;
+            properties.Items["client_id"] = app.Id.ToString();
 
-            return Challenge(props, OpenIdConnectDefaults.AuthenticationScheme);
+            return Challenge(properties, OpenIdConnectDefaults.AuthenticationScheme);
         }
 
-        [HttpGet("oidc/callback")]
-        public async Task<IActionResult> Callback()
+        [HttpGet("logout")]
+        public async Task<IActionResult> Logout(string tokenId, string clientId)
         {
-            Console.WriteLine("Callback!!!");
-            var idToken = await HttpContext.GetTokenAsync("id_token");
-            var accessToken = await HttpContext.GetTokenAsync("access_token");
+            //var result = await HttpContext.AuthenticateAsync();
 
-            var username = User.Identity?.Name;
+            //var tokens = result.Properties?.GetTokens();
 
-            if (username == null)
-                return Unauthorized();
+            //foreach (var token in tokens ?? Enumerable.Empty<AuthenticationToken>())
+            //{
+            //    Console.WriteLine($"{token.Name}: {token.Value}");
+            //}
 
-            var jwt = _jwt.Generate(username, 1);
+            //var idToken = await HttpContext.GetTokenAsync("id_token");
+            //Console.WriteLine($"token {idToken}");
 
-            return Ok(new
+            //var result1 = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+
+            //Console.WriteLine(result1.Succeeded);
+
+            var app = await _appService.GetById(int.Parse(clientId));
+            if (app is null)
             {
-                access_token = jwt
-            });
+                return Redirect($"/auth/error?msg={Uri.EscapeDataString("App no válida")}");
+            }
+
+            var properties = new AuthenticationProperties();
+            properties.Parameters["id_token_hint"] = tokenId;
+            properties.Items["logout_return"] = app.UrlLogout;
+            return SignOut(properties, OpenIdConnectDefaults.AuthenticationScheme);
         }
     }
 }
